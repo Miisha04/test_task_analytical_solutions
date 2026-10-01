@@ -1,0 +1,80 @@
+services:
+
+  db:
+    image: postgres:15-alpine
+    container_name: documents_db
+    restart: always
+
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: documents
+
+    ports:
+      - "5432:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d documents"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:9.5.4
+    container_name: documents_elasticsearch
+    restart: always
+
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+
+    ports:
+      - "9200:9200"
+
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -f http://localhost:9200/_cluster/health || exit 1"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+
+  api:
+    build: .
+    container_name: search_documents_api
+    restart: always
+
+    depends_on:
+      db:
+        condition: service_healthy
+
+      elasticsearch:
+        condition: service_healthy
+
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: documents
+
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+
+    ports:
+      - "8070:8070"
+
+
+volumes:
+  postgres_data:
+  elasticsearch_data:
